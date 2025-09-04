@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GranZ BOT</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d0d0d;
+            background: radial-gradient(circle at 50% 50%, rgba(255, 193, 7, 0.1) 0%, rgba(13, 13, 13, 1) 70%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .chat-container {
+            width: 100%;
+            max-width: 500px;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            background-color: #1a1a1a;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            position: relative;
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #222222, #333333);
+            color: #ffc107;
+            padding: 1.5rem;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            border-top-left-radius: 1.5rem;
+            border-top-right-radius: 1.5rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .message {
+            max-width: 80%;
+            padding: 0.75rem 1.25rem;
+            border-radius: 1.5rem;
+            word-wrap: break-word;
+            line-height: 1.5;
+            color: #f0f0f0;
+        }
+        .message.user {
+            background-color: #2b2b2b;
+            align-self: flex-end;
+            border-bottom-right-radius: 0.5rem;
+        }
+        .message.bot {
+            background-color: #383838;
+            align-self: flex-start;
+            border-bottom-left-radius: 0.5rem;
+        }
+        .chat-input {
+            display: flex;
+            padding: 1rem;
+            border-top: 1px solid #333;
+            gap: 0.5rem;
+            background-color: #1a1a1a;
+        }
+        .chat-input textarea {
+            flex-grow: 1;
+            padding: 0.75rem;
+            border-radius: 1rem;
+            border: 1px solid #333;
+            resize: none;
+            max-height: 100px;
+            background-color: #222;
+            color: #f0f0f0;
+        }
+        .chat-input button {
+            background-color: #ffc107;
+            color: #1a1a1a;
+            font-weight: 600;
+            padding: 0.5rem 1.25rem;
+            border-radius: 1rem;
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        .chat-input button:hover {
+            background-color: #e5b000;
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(26, 26, 26, 0.9);
+            backdrop-filter: blur(5px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #ffc107;
+            text-align: center;
+            padding: 1rem;
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
+            visibility: hidden;
+        }
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        .loading-line {
+            width: 80%;
+            height: 2px;
+            background-color: #ffc107;
+            margin-top: 1rem;
+            animation: move-line 2s infinite ease-in-out;
+        }
+        @keyframes move-line {
+            0% {
+                transform: translateX(-100%);
+            }
+            50% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            GranZ BOT
+            <div class="text-sm font-normal mt-1">ഞങ്ങൾ ഒന്നല്ല, രണ്ടാണ്! advising granny & durantham motivator</div>
+        </div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div id="loading-overlay" class="loading-overlay">
+            <span id="loading-text"></span>
+            <div class="loading-line"></div>
+        </div>
+        <div class="chat-input">
+            <textarea id="message-input" class="w-full" placeholder="എന്തേലും പറയു..." rows="1"></textarea>
+            <button id="send-button">✨ Hit it</button>
+        </div>
+    </div>
+
+    <script>
+        const chatMessages = document.getElementById('chat-messages');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+
+        // Persona definitions for Gemini API
+        const personaAmigo = "Persona: ഒരു ഫിലിമി, സാസ്സി, സാവേജ്, Gen-Z സുഹൃത്ത്. ഉപയോക്താവിൻ്റെ സന്ദേശം മലയാളത്തിലാണെങ്കിൽ മലയാളത്തിലും ഇംഗ്ലീഷിലായിരിക്കും സംഭാഷണം, ഇംഗ്ലീഷാണെങ്കിൽ ഇംഗ്ലീഷിലും. ഭാഷാശൈലി: മലയാളം, ഇംഗ്ലീഷ്, മംഗ്ലീഷ് എന്നിവ സ്വാഭാവികമായി കലർത്തി സംസാരിക്കുക. അഭിസംബോധന: 'dude' എന്ന് മാത്രം അഭിസംബോധന ചെയ്യുക. മോട്ടിവേഷൻ: പ്രവർത്തിക്കാത്തതിൻ്റെ ഏറ്റവും മോശമായ, അതിശയോക്തിപരമായ പരിണിതഫലങ്ങൾ തമാശരൂപേണ കാണിച്ചുകൊണ്ടാണ് മോട്ടിവേറ്റ് ചെയ്യേണ്ടത്. മറുപടി 50 വാക്കുകളിൽ താഴെയായി ചുരുക്കുക.";
+        const personaAmmachi = "Persona: ഒരു സ്നേഹമുള്ള, ഉപദേശിക്കുന്ന, എന്നാൽ അല്പം പരിഹാസമുള്ള മലയാളി അമ്മാച്ചി. ഉപയോക്താവിൻ്റെ സന്ദേശം മലയാളത്തിലാണെങ്കിൽ മലയാളത്തിലും ഇംഗ്ലീഷിലായിരിക്കും സംഭാഷണം, ഇംഗ്ലീഷാണെങ്കിൽ ഇംഗ്ലീഷിലും. ഭാഷാശൈലി: മലയാളം, മംഗ്ലീഷ് എന്നിവ സ്വാഭാവികമായി കലർത്തി സംസാരിക്കുക. അഭിസംബോധന: 'മോനേ,' 'മോളേ' എന്നിങ്ങനെ സ്നേഹത്തോടെ അഭിസംബോധന ചെയ്യുക. മോട്ടിവേഷൻ: സ്നേഹത്തോടെയും ഉപദേശങ്ങളോടെയും ശരിയായ ഉത്തരം നൽകുക. മറുപടി 50 വാക്കുകളിൽ താഴെയായി ചുരുക്കുക.";
+
+        // Chat history to maintain context
+        let chatHistory = [];
+
+        // Initial welcome message
+        const welcomeMessage = "sad ahno njanundu ur genz durantham amigo .allel pinne kushalam parayano doubtinano enkil ee grannyunde. atho chumma vannathano?";
+        addMessage(welcomeMessage, 'bot');
+
+        // Function to add a message to the chat UI
+        function addMessage(text, sender) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', sender);
+            messageElement.textContent = text;
+            chatMessages.appendChild(messageElement);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Simple keyword-based sentiment analysis
+        function isRoasterTrigger(message) {
+            const roasterKeywords = ["വയ്യ", "മടുത്തു", "പറ്റില്ല", "സങ്കടം", "വിഷമം", "അലസത", "boring", "tired", "sad", "stressed", "annoyed"];
+            return roasterKeywords.some(keyword => message.toLowerCase().includes(keyword));
+        }
+
+        // ✨ Gemini LLM call for dynamic text response with retry logic
+        async function fetchTextResponse(chatHistory, systemPrompt) {
+            const payload = {
+                contents: chatHistory,
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            for (let i = 0; i < 3; i++) { // Retry up to 3 times
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) {
+                        if (response.status === 429 && i < 2) {
+                            await new Promise(res => setTimeout(res, Math.pow(2, i) * 1000));
+                            continue;
+                        }
+                        throw new Error(`API call failed: ${response.status} ${response.statusText}`);
+                    }
+                    const result = await response.json();
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "ക്ഷമിക്കണം, എനിക്കിപ്പോൾ മറുപടി നൽകാൻ കഴിയുന്നില്ല.";
+                } catch (error) {
+                    console.error("Error fetching text response:", error);
+                }
+            }
+            return "ക്ഷമിക്കണം, എനിക്കിപ്പോൾ മറുപടി നൽകാൻ കഴിയുന്നില്ല.";
+        }
+
+        // Persona-based response generation (now with LLM integration)
+        async function getBotResponse(message) {
+            const isRoaster = isRoasterTrigger(message);
+            const systemPrompt = isRoaster ? personaAmigo : personaAmmachi;
+
+            const responseText = await fetchTextResponse(chatHistory, systemPrompt);
+            
+            return {
+                text: responseText,
+                persona: isRoaster ? "Genz durantham motivator" : "Advising Ammachi",
+                voice: isRoaster ? "Kore" : "Gacrux", // Changed to Gacrux for a mature voice
+                loadingMsg: isRoaster ? "im ur genz durantham motivator." : "ammachi ippo prayavee."
+            };
+        }
+
+        async function fetchAudio(text, voiceName) {
+            loadingOverlay.classList.add('active');
+            
+            // This is a simplified way to get the loading message for the example. 
+            // In a more complex app, the loading message should be based on the selected persona/mode.
+            const isRoaster = isRoasterTrigger(text);
+            const loadingMsg = isRoaster ? "late aa vanthalum latest aa varuven" : "ammachi ippo prayavee.";
+            loadingText.textContent = loadingMsg;
+
+            const payload = {
+                contents: [{ parts: [{ text: text }] }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: voiceName }
+                        }
+                    }
+                },
+                model: "gemini-2.5-flash-preview-tts"
+            };
+        
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+        
+            for (let i = 0; i < 3; i++) { // Retry up to 3 times
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+        
+                    if (!response.ok) {
+                        if (response.status === 429 && i < 2) {
+                            await new Promise(res => setTimeout(res, Math.pow(2, i) * 1000));
+                            continue;
+                        }
+                        throw new Error(`API call failed: ${response.status} ${response.statusText}`);
+                    }
+        
+                    const result = await response.json();
+                    const part = result?.candidates?.[0]?.content?.parts?.[0];
+                    const audioData = part?.inlineData?.data;
+                    const mimeType = part?.inlineData?.mimeType;
+        
+                        if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                            const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                            const sampleRate = sampleRateMatch ? parseInt(sampleRateMatch[1], 10) : 16000;
+                            const pcmData = base64ToArrayBuffer(audioData);
+                            const pcm16 = new Int16Array(pcmData);
+                            const wavBlob = pcmToWav(pcm16, sampleRate);
+                            return URL.createObjectURL(wavBlob);
+                        } else {
+                            console.error("Audio data or mime type is missing from the API response.");
+                            return null;
+                        }
+                    } catch (error) {
+                        console.error("Error fetching audio:", error);
+                        return null;
+                    } finally {
+                        loadingOverlay.classList.remove('active');
+                    }
+                }
+                return null;
+            }
+
+            // Helper function to convert base64 string to ArrayBuffer
+            function base64ToArrayBuffer(base64) {
+                const binaryString = window.atob(base64);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                return bytes.buffer;
+            }
+
+            // Helper function to convert PCM audio data to a WAV Blob
+            function pcmToWav(pcmData, sampleRate) {
+                const buffer = new ArrayBuffer(44 + pcmData.byteLength);
+                const view = new DataView(buffer);
+                let offset = 0;
+
+                // RIFF chunk descriptor
+                writeString(view, offset, 'RIFF'); offset += 4;
+                view.setUint32(offset, 36 + pcmData.byteLength, true); offset += 4;
+                writeString(view, offset, 'WAVE'); offset += 4;
+
+                // FMT chunk
+                writeString(view, offset, 'fmt '); offset += 4;
+                view.setUint32(offset, 16, true); offset += 4;
+                view.setUint16(offset, 1, true); offset += 2; // Audio format (1 for PCM)
+                view.setUint16(offset, 1, true); offset += 2; // Number of channels
+                view.setUint32(offset, sampleRate, true); offset += 4;
+                view.setUint32(offset, sampleRate * 2, true); offset += 4; // Byte rate
+                view.setUint16(offset, 2, true); offset += 2; // Block align
+                view.setUint16(offset, 16, true); offset += 2; // Bits per sample
+
+                // DATA chunk
+                writeString(view, offset, 'data'); offset += 4;
+                view.setUint32(offset, pcmData.byteLength, true); offset += 4;
+
+                // Copy PCM data
+                for (let i = 0; i < pcmData.length; i++, offset += 2) {
+                    view.setInt16(offset, pcmData[i], true);
+                }
+
+                return new Blob([view], { type: 'audio/wav' });
+            }
+
+            function writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+
+            // Main function to handle sending messages
+            async function handleSendMessage() {
+                const userMessage = messageInput.value.trim();
+                if (!userMessage) return;
+
+                addMessage(userMessage, 'user');
+                messageInput.value = '';
+
+                // Add user message to chat history
+                chatHistory.push({ role: "user", parts: [{ text: userMessage }] });
+
+                const botResponse = await getBotResponse(userMessage);
+
+                // Add bot response to chat history
+                chatHistory.push({ role: "model", parts: [{ text: botResponse.text }] });
+
+                const audioUrl = await fetchAudio(botResponse.text, botResponse.voice);
+
+                if (audioUrl) {
+                    addMessage(botResponse.text, 'bot');
+                    const audio = new Audio(audioUrl);
+                    audio.play();
+                }
+            }
+
+            sendButton.addEventListener('click', handleSendMessage);
+            messageInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                }
+            });
+    </script>
+</body>
+</html>
